@@ -24,6 +24,7 @@ extern VOID NATIVE_FUNCTOR_RELEASE_cgo( VOID* tag );
 extern INT SC_CALLBACK ELEMENT_COMPARATOR_cgo( HELEMENT he1, HELEMENT he2, LPVOID param );
 // ValueEnumElements
 extern BOOL SC_CALLBACK KeyValueCallback_cgo(LPVOID param, const VALUE* pkey, const VALUE* pval );
+extern BOOL SC_CALLBACK CtxKeyValueCallback_cgo(LPVOID param, const VALUE* pkey, const VALUE* pval);
 
 extern const char * SCITER_DLL_PATH;
 
@@ -38,8 +39,9 @@ import "C"
 import (
 	"fmt"
 	"log"
-	"strings"
+	"math/rand"
 	"runtime"
+	"strings"
 	"unsafe"
 )
 
@@ -2223,6 +2225,67 @@ func (pdst *Value) EnumerateKeyValue(fn KeyValueCallback) error {
 	cparam := C.LPVOID(unsafe.Pointer(&fn))
 	// cgo call
 	return wrapValueResult(VALUE_RESULT(C.ValueEnumElements(cpval, cpenum, cparam)), "ValueEnumElements")
+}
+
+type CtxKeyValueCallback func(ctx interface{}, key, value *Value) bool
+
+type cb struct {
+    ctx interface{}
+    fn CtxKeyValueCallback
+}
+
+var (
+    cbList map[uint32]*cb
+)
+
+func addCallBack(entry *cb) uint32 {
+    if cbList == nil {
+        cbList = make(map[uint32]*cb)
+    }
+    var n uint32 = 0
+    for ; n == 0; {
+        n = rand.Uint32()
+        if _, ok := cbList[n]; ok {
+            // entry taken
+            n = 0
+        }
+    }
+    cbList[n] = entry
+    return n
+}
+
+func delCallBack(n uint32) {
+    if cbList != nil {
+        delete(cbList, n)
+    }
+}
+
+func getCallBack(n uint32) *cb {
+    if cbList == nil {
+        return nil
+    }
+    return cbList[n]
+}
+
+//export goCtxKeyValueCallback
+func goCtxKeyValueCallback(param unsafe.Pointer, key, value *Value) bool {
+    ctx := getCallBack(*(*uint32)(param))
+    if ctx != nil {
+        return ctx.fn(ctx.ctx, key, value)
+    }
+    return false
+}
+
+func (pdst *Value) EnumerateCtxKeyValue(ctx interface{}, fn CtxKeyValueCallback) error {
+    // args
+    cpval := (*C.VALUE)(unsafe.Pointer(pdst))
+    cpenum := (*C.KeyValueCallback)(unsafe.Pointer(C.CtxKeyValueCallback_cgo))
+    c := cb{ctx: ctx, fn: fn}
+    num := addCallBack(&c)
+    defer delCallBack(num)
+    cparam := C.LPVOID(unsafe.Pointer(&num))
+    // cgo call
+    return wrapValueResult(VALUE_RESULT(C.ValueEnumElements(cpval, cpenum, cparam)), "ValueEnumElements")
 }
 
 // UINT  ValueSetValueToKey ( VALUE* pval, const VALUE* pkey, const VALUE* pval_to_set) ;//{ return SAPI()->ValueSetValueToKey ( pval, pkey, pval_to_set); }

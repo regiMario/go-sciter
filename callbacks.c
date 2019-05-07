@@ -63,3 +63,10 @@ BOOL SC_CALLBACK KeyValueCallback_cgo(LPVOID param, const VALUE* pkey, const VAL
 {
     return goKeyValueCallback(param, (VALUE*)pkey, (VALUE*)pval);
 }
+
+// typedef BOOL SC_CALLBACK CtxKeyValueCallback(LPVOID param, const VALUE* pkey, const VALUE* pval);
+
+BOOL SC_CALLBACK CtxKeyValueCallback_cgo(LPVOID param, const VALUE* pkey, const VALUE* pval)
+{
+    return goCtxKeyValueCallback(param, (VALUE*)pkey, (VALUE*)pval);
+}
